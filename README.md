@@ -561,5 +561,276 @@ src/Event/
 > **Étape 2 :** Installation Symfony 7, configuration PostgreSQL, génération des entités Doctrine avec toutes les relations, et migrations de base de données.
 
 ---
+classDiagram
+    %% =====================
+    %% ENTITÉS PRINCIPALES
+    %% =====================
 
+    class Utilisateur {
+        +int id
+        +string email
+        +string motDePasse
+        +string prenom
+        +string nom
+        +string telephone
+        +string urlAvatar
+        +string langue
+        +array roles
+        +bool estVerifie
+        +string stripeAccountId
+        +DateTime dateCreation
+        +DateTime dateMiseAJour
+        +sinscrire() void
+        +seConnecter() string
+        +modifierProfil() void
+        +estProprietaire() bool
+        +estVoyageur() bool
+        +estAdmin() bool
+    }
+
+    class Logement {
+        +int id
+        +string titre
+        +string slug
+        +string description
+        +string type
+        +float prixParNuit
+        +string devise
+        +int nbVoyageursMax
+        +int nbChambres
+        +int nbSallesDeBain
+        +float latitude
+        +float longitude
+        +string adresse
+        +string ville
+        +string region
+        +string statut
+        +DateTime dateCreation
+        +DateTime dateMiseAJour
+        +publier() void
+        +suspendre() void
+        +getNoteMoyenne() float
+        +estDisponible(Date debut, Date fin) bool
+    }
+
+    class Reservation {
+        +int id
+        +Date dateArrivee
+        +Date dateDepart
+        +int nbVoyageurs
+        +int nbNuits
+        +float montantBase
+        +float tauxCommission
+        +float montantCommission
+        +float montantTotal
+        +string devise
+        +float montantEnEur
+        +string statut
+        +DateTime dateCreation
+        +DateTime dateConfirmation
+        +DateTime dateAnnulation
+        +confirmer() void
+        +annuler() void
+        +terminer() void
+        +calculerNuits() int
+        +calculerTotal() float
+    }
+
+    class Paiement {
+        +int id
+        +float montant
+        +string devise
+        +string stripePaymentIntentId
+        +string statut
+        +DateTime datePaiement
+        +traiter() bool
+        +rembourser() bool
+        +marquerSucces() void
+        +marquerEchec() void
+    }
+
+    class Avis {
+        +int id
+        +int note
+        +string commentaire
+        +int scoreProprete
+        +int scoreEmplacement
+        +int scoreRapportQualitePrix
+        +string reponseProprietaire
+        +bool estVisible
+        +DateTime dateCreation
+        +moderer(bool visible) void
+        +ajouterReponseProprietaire(string reponse) void
+        +getNoteGlobale() float
+    }
+
+    class Equipement {
+        +int id
+        +string nom
+        +string icone
+        +string categorie
+    }
+
+    class Media {
+        +int id
+        +string nomFichier
+        +string typeMime
+        +int taille
+        +int position
+        +string type
+        +getUrl() string
+        +reordonner(int position) void
+    }
+
+    class Disponibilite {
+        +int id
+        +Date date
+        +bool estDisponible
+        +float prixSpecifique
+        +bloquer() void
+        +debloquer() void
+        +aUnPrixSpecifique() bool
+    }
+
+    class ConfigurationCommission {
+        +int id
+        +float taux
+        +float montantMin
+        +float montantMax
+        +bool estActif
+        +DateTime dateCreation
+        +activer() void
+        +desactiver() void
+    }
+
+    %% =====================
+    %% SERVICES (SYMFONY)
+    %% =====================
+
+    class CalculateurCommission {
+        <<Service>>
+        -ConfigurationCommissionRepository repoConfig
+        +calculer(Money montantBase) ResultatCommission
+    }
+
+    class ConvertisseurDevise {
+        <<Service>>
+        -HttpClientInterface client
+        -CacheInterface cache
+        -string cleApiKey
+        +convertir(float montant, string de, string vers) float
+        -recupererTaux(string de, string vers) float
+    }
+
+    class ServiceReservation {
+        <<Service>>
+        -VerificateurDisponibilite verifDispo
+        -CalculateurCommission calcComm
+        -EventDispatcherInterface dispatcher
+        +creerReservation(RequeteReservation dto) Reservation
+        +confirmerReservation(Reservation res) void
+        +annulerReservation(Reservation res) void
+    }
+
+    class VerificateurDisponibilite {
+        <<Service>>
+        -DisponibiliteRepository repoDispo
+        +estDisponible(Logement l, Date debut, Date fin) bool
+        +bloquerDates(Logement l, Date debut, Date fin) void
+        +getDatesDisponibles(Logement l, Date du, Date au) array
+    }
+
+    class ServiceStripe {
+        <<Service>>
+        -string cleSecreteStripe
+        +creerIntentionPaiement(float montant, string devise) string
+        +capturerPaiement(string intentionPaiementId) bool
+        +rembourserPaiement(string intentionPaiementId) bool
+        +creerCompteConnecte(Utilisateur proprietaire) string
+        +transfererFonds(float montant, string compteId) bool
+    }
+
+    %% =====================
+    %% DTO
+    %% =====================
+
+    class RequeteReservation {
+        <<DTO>>
+        +int idLogement
+        +int idVoyageur
+        +Date dateArrivee
+        +Date dateDepart
+        +int nbVoyageurs
+        +string devise
+    }
+
+    class ResultatCommission {
+        <<DTO>>
+        +Money base
+        +Money commission
+        +Money total
+        +float taux
+    }
+
+    class FiltresRecherche {
+        <<DTO>>
+        +string ville
+        +Date dateArrivee
+        +Date dateDepart
+        +int nbVoyageurs
+        +float prixMin
+        +float prixMax
+        +array idsEquipements
+        +string type
+        +string trierPar
+    }
+
+    %% =====================
+    %% ÉVÉNEMENTS
+    %% =====================
+
+    class EvenementReservationConfirmee {
+        <<Event>>
+        +Reservation reservation
+    }
+
+    class EvenementLogementPublie {
+        <<Event>>
+        +Logement logement
+    }
+
+    %% =====================
+    %% RELATIONS
+    %% =====================
+
+    %% Relations Utilisateur
+    Utilisateur "1" --> "0..*" Logement : possede
+    Utilisateur "1" --> "0..*" Reservation : effectue (voyageur)
+    Utilisateur "1" --> "0..*" Avis : ecrit
+
+    %% Relations Logement
+    Logement "1" --> "0..*" Reservation : a
+    Logement "1" --> "0..*" Media : possede
+    Logement "1" --> "0..*" Disponibilite : a
+    Logement "1" --> "0..*" Avis : recoit
+    Logement "0..*" --> "0..*" Equipement : inclut
+
+    %% Relations Reservation
+    Reservation "1" --> "1" Paiement : lie_a
+    Reservation "1" --> "1" Utilisateur : voyageur
+    Reservation "1" --> "1" Logement : concerne
+
+    %% Relations Services
+    ServiceReservation ..> CalculateurCommission : utilise
+    ServiceReservation ..> VerificateurDisponibilite : utilise
+    ServiceReservation ..> ServiceStripe : utilise
+    ServiceReservation ..> RequeteReservation : recoit
+    ServiceReservation ..> EvenementReservationConfirmee : declenche
+
+    CalculateurCommission ..> ResultatCommission : produit
+    CalculateurCommission ..> ConfigurationCommission : lit
+
+    %% Événements
+    EvenementReservationConfirmee --> Reservation : encapsule
+    EvenementLogementPublie --> Logement : encapsule
 *Document généré pour le projet TunisiaStay — Architecture v1.0*
